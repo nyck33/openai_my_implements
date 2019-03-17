@@ -133,7 +133,7 @@ class ReinforceAgent:
 		labels = np.negative(labels)
 		#print('labels\n {}'.format(labels))
 
-		self.model.fit(x=update_inputs, y=labels, epochs=1, verbose=1)
+		self.model.fit(x=update_inputs, y=labels, epochs=1, verbose=0)
 
 		self.states, self.actions, self.rewards, self.logprobs, = [], [], [], []
 
