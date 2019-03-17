@@ -1,8 +1,11 @@
 #VPG Reinforce implementation 
-#play out a full episode, assign positive to all moves in winning episodes
-#and negative reward to all moves in losing episodes then update at end of each episode
 #ideas taken from Karpathy and Silver plus my other forked Reinforcement repo
-
+#Re: Leaky ReLU and dropout in RL:
+'''
+Usually there isn’t that much of a problem of overfitting in RL due to state space, ie. can get more samples from env.
+Ratherly, ‘dying’ neurons are more of an issue than overfitting, hence the success of strategies that utilise 
+leaky linear rectified units (Leaky ReLU).  ie. dropout reduces overfitting
+'''
 #pip install -q tensorflow==2.0.0-alpha0
 import sys
 import gym
