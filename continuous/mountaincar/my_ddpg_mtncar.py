@@ -12,16 +12,44 @@ from keras.layers.advanced_activations import LeakyReLU
 import random
 from collections import namedtuple, deque
 #import actor critic, replay, OU noise
-from my_ddpg_ac import ReplayBuffer, Actor, Critic, OUNoise
+from my_ddpg_ac import Actor, Critic, OUNoise
+
+class ReplayBuffer:
+    """fixed-size buffer to store experience tuples"""
+
+    def __init__(self, buffer_size, batch_size):
+        """initialize a replaybuffer object.
+        Params
+        ======
+            buffer_size:  max size of buffer
+            batch_size: size of each training batch
+        """
+        self.memory = deque(maxlen=buffer_size) #100k
+        self.batch_size = batch_size
+        
+
+    def add(self, state, action, reward, next_state, done):
+        """Add a new experience to memory."""
+        e = self.experience(state, action, reward, next_state, done)
+        self.memory.append(e)
+
+    def sample(self, batch_size=64):
+        "Randomly return a batch of experience from memory"
+        return random.sample(self.memory, k=self.batch_size)
+
+    def __len__(self):
+        """Return the current size of internal memory"""
+        return len(self.memory)
 
 class DDPG():
     """Reinforcement learning agent that learns using DDPG"""
     #change from action size to action range I think
-    def __init__(self, state_size, action_size):
+    def __init__(self, state_size, action_size, action_max):
         self.state_size = state_size
         self.action_size = action_size #1
-        self.action_low = -1.0
-        self.action_high = 1.0
+        self.action_range = action_max * 2
+        self.action_low = action_max - self.action_range
+        self.action_high = action_max
 
         #Actor Policy Model 
         self.actor_local = Actor(self.state_size, self.action_size, \
@@ -34,7 +62,7 @@ class DDPG():
         self.critic_target = Critic(self.state_size, self.action_size)
 
         #initialize target model parameters with local model parameters
-        self.criitc_target.model.set_weights(self.critic_local.model_get_weights())
+        self.criitc_target.model.set_weights(self.critic_local.model.get_weights())
         self.actor_target.model.set_weights(self.actor_local.model.get_weights())
 
         #Noise process
@@ -129,11 +157,12 @@ if __name__== "__main__":
     env=gym.make("MountainCarContinuous-v0")
 
     state_size = env.observation_space.shape[0]
-    #change this to action_max and action_min as there is no "n"
-    #in continuous action space so action_size is one real number 
-    #btwn -1 and 1
-    action_size = 1
-    agent = DDPG(state_size, action_size)
+    action_size = env.action_space.shape[0]
+    action_bound = env.action_space.high
+    #ensure action bound is symmetric
+    assert (env.action_space.high == -env.action_space.low)
+
+    agent = DDPG(state_size, action_size, action_bound)
 
     scores, episodes, means, stds = [], [], [], []
 

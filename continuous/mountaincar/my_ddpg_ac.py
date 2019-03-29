@@ -11,32 +11,7 @@ from keras.layers.advanced_activations import LeakyReLU
 import random
 from collections import namedtuple, deque
 
-class ReplayBuffer:
-    """fixed-size buffer to store experience tuples"""
 
-    def __init__(self, buffer_size, batch_size):
-        """initialize a replaybuffer object.
-        Params
-        ======
-            buffer_size:  max size of buffer
-            batch_size: size of each training batch
-        """
-        self.memory = deque(maxlen=buffer_size) #100k
-        self.batch_size = batch_size
-        
-
-    def add(self, state, action, reward, next_state, done):
-        """Add a new experience to memory."""
-        e = self.experience(state, action, reward, next_state, done)
-        self.memory.append(e)
-
-    def sample(self, batch_size=64):
-        "Randomly return a batch of experience from memory"
-        return random.sample(self.memory, k=self.batch_size)
-
-    def __len__(self):
-        """Return the current size of internal memory"""
-        return len(self.memory)
 """Params
     ======
         state_size(int): Dimension of each state
@@ -63,26 +38,27 @@ class Actor:
         
     def build_model(self):
         """Build actor(policy) network that maps states -> actions."""
-        lrelu = LeakyReLU(alpha=0.1)
         #Define input layer (states)
         states = layers.Input(shape=(self.state_size,), name='states')
-
-
-        #Add hidden layers, try different num layers, sizes, activation, batch_normalization
-        #regularizers, etc
-        net = layers.Dense(units=64, activation=lrelu)(states)
-        net = layers.Dense(units=64, activation=lrelu)(net)
+        #Add hidden layers, try different num layers, sizes, activation, batch_normalization, regularizers, etc
+        net = layers.Dense(units=128)(states)
+        net = layers.BatchNormalization()(net)
+        net = layers.LeakyReLU(alpha=0.1)(net)
+        net = layers.Dense(units=64)(net)
+        net = layers.BatchNormalization()(net)
+        net = layers.LeakyReLU(alpha=0.1)(net)
         #final layer with tanh which is a scaled sigmoid activation (between -1 and 1)
         #https://medium.com/the-theory-of-everything/understanding-activation-functions-in-neural-networks-9491262884e0
         raw_actions = layers.Dense(units=self.action_size, activation='tanh', name='raw_actions')(net)
 
         #Create keras model
         self.model = models.Model(input=states, outputs=raw_actions)
-        #these lines are called from DDPG once the gradients of Q-value
-        #obtained from critic
-        #we define action_gradients which appears in K.function so it chains back from
-        #K.function back up here I think
-        #Define loss function using action value (Q value) gradients
+        """these lines are called from DDPG once the gradients of Q-value
+        obtained from critic
+        we define action_gradients which appears in K.function so it chains back from
+        K.function back up here I think
+        Define loss function using action value (Q value) gradients from critic
+        placeholder below"""
         action_gradients = layers.Input(shape=(self.action_size,)) #returns tensor
 
         loss = K.mean(-action_gradients * raw_actions)
@@ -112,31 +88,40 @@ class Critic:
         self.state_size = state_size
         self.action_size = action_size
         #initialize any other variable here
-        self.critic_local_lr = 0.0001
-        self.critic_target_lr = 0.0003
+        self.critic_local_lr = 0.001 #taken from Emani DDPG
+        self.critic_target_lr = 0.003
 
         self.build_model()
 
     #maps (state, action) pairs to Q values so map a tuple to a value?
     def build_model(self):
-        lrelu = LeakyReLU(alpha=0.1)
+        #lrelu = LeakyReLU(alpha=0.1)
         #Define input layers
         states = layers.Input(shape=(self.state_size,), name="states")
         actions = layers.Input(shape=(self.action_size,), name="actions")
 
         #Add hidden layers for state pathway
-        net_states = layers.Dense(units=32, activation=lrelu)(states)
-        net_states = layers.Dense(units=64, activation=lrelu)(net_states)
+        net_states = layers.Dense(units=256, use_bias=False)(states)
+        net_states = layers.BatchNormalization()(net_states)
+        net_states = layers.LeakyReLU(alpha=0.1)(net_states)
+        net_states = layers.Dense(units=128)(net_states)
+        net_states = layers.BatchNormalization()(net_states)
+        net_states = layers.LeakyReLU(alpha=0.1)(net_states)
 
         #hidden layers for action
-        net_actions = layers.Dense(units=32, activation=lrelu)(states)
-        net_actions = layers.Dense(units=64, activation=lrelu)(net_actions)
+        net_actions = layers.Dense(units=128)(states)
+        net_actions = layers.BatchNormalization()(net_actions)
+        net_actions = layers.LeakyReLU(alpha=0.1)(net_actions)
+        net_actions = layers.Dense(units=128)(net_actions)
+        net_actions = layers.BatchNormalization()(net_actions)
+        net_actions = layers.LeakyReLU(alpha=0.1)(net_actions)
 
         #try different layers sizes, activations, add batch normalization, regularizers, etc.
 
         #Combine state and action pathyways
         net = layers.Add()([net_states, net_actions])
-        net = layers.Activation(lrelu)(net)
+        net = layers.BatchNormalization()(net)
+        net = layers.LeakyReLU(alpha=0.1)(net)
 
         #Add more layers ot the combined network if needed
             
@@ -153,8 +138,9 @@ class Critic:
 
         #Compute action gradients (derivative of Q values w.r.t. to actions)
         action_gradients = K.gradients(Q_value, actions)
-        #self.get_action_gradients can be called
-        self.get_action_gradients = K.function(inputs=[*self.model.input, K.learning_phase()], outputs=action_gradients)
+        #self.get_action_gradients can be called by agent's critic_local in def learn
+        self.get_action_gradients = K.function(inputs=[self.model.input[0], self.model.input[1], \
+            K.learning_phase()], outputs=[action_gradients])
 
 class OUNoise:
     """Ornstein-Uhlenbeck process"""
