@@ -4,6 +4,7 @@ import gym
 import pylab
 import numpy as np
 import tensorflow as tf
+import sys
 
 from keras import layers, models, optimizers
 from keras import backend as K
@@ -13,6 +14,8 @@ import random
 from collections import namedtuple, deque
 #import actor critic, replay, OU noise
 from my_ddpg_ac import Actor, Critic, OUNoise
+
+EPISODES = 1000
 
 class ReplayBuffer:
     """fixed-size buffer to store experience tuples"""
@@ -26,6 +29,7 @@ class ReplayBuffer:
         """
         self.memory = deque(maxlen=buffer_size) #100k
         self.batch_size = batch_size
+        self.experience = namedtuple("Experience", field_names=["state", "action", "reward", "next_state", "done"])
         
 
     def add(self, state, action, reward, next_state, done):
@@ -50,7 +54,8 @@ class DDPG():
         self.action_range = action_max * 2
         self.action_low = action_max - self.action_range
         self.action_high = action_max
-
+        print("self.action_low", self.action_low) #-1
+        print("self.action_high", self.action_high) #1
         #Actor Policy Model 
         self.actor_local = Actor(self.state_size, self.action_size, \
             self.action_low, self.action_high)
@@ -62,7 +67,7 @@ class DDPG():
         self.critic_target = Critic(self.state_size, self.action_size)
 
         #initialize target model parameters with local model parameters
-        self.criitc_target.model.set_weights(self.critic_local.model.get_weights())
+        self.critic_target.model.set_weights(self.critic_local.model.get_weights())
         self.actor_target.model.set_weights(self.actor_local.model.get_weights())
 
         #Noise process
@@ -70,7 +75,7 @@ class DDPG():
         self.exploration_theta = 0.15
         self.exploration_sigma = 0.2
         self.noise = OUNoise(self.action_size, self.exploration_mu, \
-            self.exploration_theta, self.exploration_signma)
+            self.exploration_theta, self.exploration_sigma)
 
         #replay memory
         self.buffer_size = 100000
@@ -84,6 +89,7 @@ class DDPG():
         self.tau_actor = 0.1
         self.tau_critic = 0.5 
         """
+        self.render = True
     #resets noise and env and outputs the initial state 
     def reset_episode(self):
         self.noise.reset()
@@ -109,8 +115,8 @@ class DDPG():
         state = np.reshape(state, [-1, self.state_size])
         raw_action = self.actor_local.model.predict(state)[0]
         noise = self.noise.sample()
-        action = np.clip(raw_action + noise, -1, 1)
-        return action #add noise for exploration
+        action = np.clip(raw_action + noise, -1, 1) #add noise for exploration
+        return action 
 
     def learn(self, experiences):
         """update policy and value parameters using given batch of 
@@ -132,13 +138,25 @@ class DDPG():
         Q_targets_next = self.critic_target.model.predict_on_batch([next_states, actions_next])
         #compute Q targets for current states using Q targets next from target_model
         #and train local critic model
-        Q_targets = rewards + self.gamma * Q_targets * (1 - dones)
+        Q_targets = rewards + self.gamma * Q_targets_next * (1 - dones)
         self.critic_local.model.train_on_batch(x=[states, actions], y=Q_targets)
 
-        #train actor model (local)
+        """called to get dQ(s,a)/da from critic
+        self.get_action_gradients = K.function(inputs=[*self.model.input, K.learning_phase()], outputs=action_gradients)
+        """
         action_gradients = np.reshape(self.critic_local.get_action_gradients([states, actions, 0]), \
             (-1, self.action_size))
+
+        """use the dQ(s,a)/da from critic to train actor
+        called:  
+        self.train_fn = K.function(inputs=[self.model.input, action_gradients, K.learning_phase()], \
+            outputs=[], updates=updates_op) no outputs
+        """
         self.actor_local.train_fn([states, action_gradients, 1])
+
+        #soft update target models, could use different tau for critic and actor
+        self.soft_update(self.critic_local.model, self.critic_target.model)
+        self.soft_update(self.actor_local.model, self.actor_target.model)
 
         #soft update target models
     def soft_update(self, local_model, target_model):
@@ -173,10 +191,6 @@ if __name__== "__main__":
         score = 0
         mean, std, large = 0, 0, 0
         state = agent.reset_episode()
-        #assign position
-        position = state[0]
-        #redundant reshape
-        state = np.reshape(state, [-1, state_size])
 
         while not done:
             if agent.render:
@@ -211,10 +225,11 @@ if __name__== "__main__":
                 print('episode:', episode, 'score:', score, 'mean:', round(mean,2), 'std:', round(std, 2))
                 if np.mean(scores[-min(100, len(scores)):]) >= 90.0:
                     sys.exit()
+'''                    
         if episode % 50 == 0:
             agent.actor_local.save_weights("./saved_models/DDPGmtncarcont_actor.h5")
             agent.critic_local.save_weights("./saved_models/DDPGmtncarcont_critic.h5")
-
+'''
 
 
 

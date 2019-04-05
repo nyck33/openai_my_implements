@@ -1,5 +1,6 @@
 import numpy as np
 import gym
+import copy
 import pylab
 import numpy as np
 import tensorflow as tf
@@ -41,18 +42,26 @@ class Actor:
         #Define input layer (states)
         states = layers.Input(shape=(self.state_size,), name='states')
         #Add hidden layers, try different num layers, sizes, activation, batch_normalization, regularizers, etc
-        net = layers.Dense(units=128)(states)
+        net = layers.Dense(units=32)(states)
         net = layers.BatchNormalization()(net)
         net = layers.LeakyReLU(alpha=0.1)(net)
         net = layers.Dense(units=64)(net)
         net = layers.BatchNormalization()(net)
         net = layers.LeakyReLU(alpha=0.1)(net)
+        net = layers.Dense(units=32)(net)
+        net = layers.BatchNormalization()(net)
+        net = layers.LeakyReLU(alpha=0.1)(net)
+
         #final layer with tanh which is a scaled sigmoid activation (between -1 and 1)
         #https://medium.com/the-theory-of-everything/understanding-activation-functions-in-neural-networks-9491262884e0
         raw_actions = layers.Dense(units=self.action_size, activation='tanh', name='raw_actions')(net)
 
+        #don't think we need to scale actions since activation is tanh
+
         #Create keras model
         self.model = models.Model(input=states, outputs=raw_actions)
+
+        self.model.summary()
         """these lines are called from DDPG once the gradients of Q-value
         obtained from critic
         we define action_gradients which appears in K.function so it chains back from
@@ -69,9 +78,12 @@ class Actor:
         #Define optimizer and training function for actor_local
         optimizer = optimizers.Adam(lr=self.actor_local_lr)
         updates_op = optimizer.get_updates(params=self.model.trainable_weights, loss=loss)
-        #self.train_fn can be called in learn function
+        """self.train_fn can be called in learn function
+        call:
+        self.actor_local.train_fn([states, action_gradients, 1])
+        """
         self.train_fn = K.function(inputs=[self.model.input, action_gradients, K.learning_phase()], \
-        outputs=[], updates=updates_op)
+            outputs=[], updates=updates_op)
         ##################################################
 
 """Initialize parameters and build model.
@@ -101,18 +113,20 @@ class Critic:
         actions = layers.Input(shape=(self.action_size,), name="actions")
 
         #Add hidden layers for state pathway
-        net_states = layers.Dense(units=256, use_bias=False)(states)
+        net_states = layers.Dense(units=32, use_bias=False)(states)
         net_states = layers.BatchNormalization()(net_states)
         net_states = layers.LeakyReLU(alpha=0.1)(net_states)
-        net_states = layers.Dense(units=128)(net_states)
+        
+        net_states = layers.Dense(units=64)(net_states)
         net_states = layers.BatchNormalization()(net_states)
         net_states = layers.LeakyReLU(alpha=0.1)(net_states)
 
         #hidden layers for action
-        net_actions = layers.Dense(units=128)(states)
+        net_actions = layers.Dense(units=32)(actions)
         net_actions = layers.BatchNormalization()(net_actions)
         net_actions = layers.LeakyReLU(alpha=0.1)(net_actions)
-        net_actions = layers.Dense(units=128)(net_actions)
+        
+        net_actions = layers.Dense(units=64)(net_actions)
         net_actions = layers.BatchNormalization()(net_actions)
         net_actions = layers.LeakyReLU(alpha=0.1)(net_actions)
 
@@ -127,25 +141,39 @@ class Critic:
             
         #Add final output layer to produce action values (Q-values)
         # array?
-        Q_value = layers.Dense(units=1, name='q_values')(net)
+        Q_values = layers.Dense(units=1, name='q_values')(net)
 
         #Create Keras model
-        self.model = models.Model(inputs=[states, actions], outputs=Q_value)
+        self.model = models.Model(inputs=[states, actions], outputs=Q_values)
 
         #Define optimizer and compile model for training with built-in loss function
         optimizer = optimizers.Adam(lr=self.critic_local_lr)
         self.model.compile(optimizer=optimizer, loss='mse')
 
+        self.model.summary()
+
         #Compute action gradients (derivative of Q values w.r.t. to actions)
-        action_gradients = K.gradients(Q_value, actions)
-        #self.get_action_gradients can be called by agent's critic_local in def learn
-        self.get_action_gradients = K.function(inputs=[self.model.input[0], self.model.input[1], \
-            K.learning_phase()], outputs=[action_gradients])
+        action_gradients = K.gradients(Q_values, actions) #dQ/dA
+        """Q_values Tensor("q_values/BiasAdd:0", shape=(?, 1), dtype=float32) 
+            actions Tensor("actions:0", shape=(?, 1), dtype=float32)"""
+        print("Q_values", Q_values, "actions", actions) #
+        print("action_gradients", action_gradients) #[None]
+        print("action_gradients type", type(action_gradients)) #list
+        #print("self.model.input", self.model.input) #states and actions
+        
+        """self.get_action_gradients can be called by agent's critic_local in def learn, action-grads used by action grads
+        K.function runs the graph to get the Q-value necessary to calculate action_gradients which is the output
+        call:
+        action_gradients = np.reshape(self.critic_local.get_action_gradients([states, actions, 0]), \
+            (-1, self.action_size))
+        """
+        self.get_action_gradients = K.function(inputs=[*self.model.input, K.learning_phase()], outputs=action_gradients)
+        print("self.get_action_gradients", self.get_action_gradients)
 
 class OUNoise:
     """Ornstein-Uhlenbeck process"""
 
-    def ___init__(self, size, mu, theta, sigma):
+    def __init__(self, size, mu, theta, sigma):
         """initialize parameters and noise process"""
         self.mu = mu * np.ones(size)
         self.theta = theta
@@ -159,7 +187,7 @@ class OUNoise:
     def sample(self):
         """Update internal state and returns as noise sample"""
         x = self.state
-        dx = self.theta * (self.mu - x) + self.signma * \
+        dx = self.theta * (self.mu - x) + self.sigma * \
          np.random.randn(len(x))
         self.state = x + dx
         return self.state
