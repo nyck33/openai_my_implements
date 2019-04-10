@@ -54,8 +54,8 @@ class A2CAgent:
         self.temp_actor = self.build_actor()
 
         if self.load_model:
-            self.actor.load_weights("./saved_models/cartpole_actor.h5")
-            self.critic.load_weights("./saved_models/cartpole_critic.h5")
+            self.actor.load_weights("./saved_models/my_ppo_cartpole_actor.h5")
+            self.critic.load_weights("./saved_models/my_ppo_cartpole_critic.h5")
 
     # approximate policy and value using Neural Network
     # actor: state is input and probability of each action is output of model (policy)
@@ -203,7 +203,7 @@ if __name__ == "__main__":
                 pylab.plot(episodes, scores, 'b')  # blue
                 pylab.plot(episodes, means, 'g')
                 pylab.plot(episodes, stds, 'r')
-                pylab.savefig("./save_graph/cartpole_a2c.png")
+                pylab.savefig("./save_graph/ppo_cartpole.png")
                 print('episode:', episode, 'score:', score, 'mean:', round(mean, 2), 'std:', round(std, 2), 'max:',
                       large)
                 # if last 10 scores mean over 490
@@ -212,5 +212,5 @@ if __name__ == "__main__":
 
         # save model
         if episode % 50 == 0:
-            agent.actor.save_weights("./saved_models/cartpole_actor.h5")
-            agent.critic.save_weights("./saved_models/cartpole_critic.h5")
+            agent.actor.save_weights("./saved_models/my_ppo_cartpole_actor.h5")
+            agent.critic.save_weights("./saved_models/my_ppo_cartpole_critic.h5")
