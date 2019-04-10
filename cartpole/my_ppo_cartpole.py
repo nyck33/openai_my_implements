@@ -16,7 +16,7 @@ import numpy as np
 from keras.layers import Dense, LeakyReLU
 from keras.models import Sequential
 from keras.optimizers import Adam
-from keras import regularizers
+#from keras import regularizers
 from keras import backend as K
 
 EPISODES = 1000
@@ -40,19 +40,18 @@ class A2CAgent:
         self.actor_lr = 0.001
         self.critic_lr = 0.005
 
-        #old prob before update
+        # old prob before update
         self.old_prob = 0.
 
-        #epsilon value for clipping formula
+        # epsilon value for clipping formula
         self.epsilon = 0.2
 
         # create models
         self.actor = self.build_actor()
         self.critic = self.build_critic()
 
-        #temp_actor
+        # temp_actor
         self.temp_actor = self.build_actor()
-
 
         if self.load_model:
             self.actor.load_weights("./saved_models/cartpole_actor.h5")
@@ -119,36 +118,42 @@ class A2CAgent:
         actor to get the new prob, then get new/old ratio and do the clip
         self.previous holds prob from before """
 
-        """may need to bring clipped new_prob back here to redo np.random.choice"""
+        """get the old aprob, action is already determined"""
         old_policy = self.actor.predict(state, batch_size=1).flatten()
-        action = np.random.choice(self.action_size, 1, p=old_policy)[0]
+        old_aprob = old_policy[action]
         """use temp_actor to get new prob so we don't update the actual actor until
-        we get the clippped update"""
+        we do the clip op"""
         curr_weights = self.actor.get_weights()
         self.temp_actor.set_weights(curr_weights)
         self.temp_actor.fit(state, advantages, epochs=1, verbose=0)
-
-        new_pro = self.temp_actor.predict(state, batch_size=1).flatten()
-
-        #clipping here, get weights and set on to actor to update
-        clip = clipper(old_prob, new_prob, advantages)
-        self.actor.set_weights(new_weights)
-
-        self.critic.fit(state, target, epochs=1, verbose=0)
-
-    def clipper(self, old_prob, new_prob, advantages):
-        ratio = new_prob/old_prob
-        #scale = min(ratio * advantages, K.clip(ratio, 1 - self.epsilon, 1 + self.epsilon) * advantages)
+        new_policy = self.temp_actor.predict(state, batch_size=1).flatten()
+        new_aprob = new_policy[action]
+        ########################stupid fucking Python
+        ratio = new_aprob / old_aprob
+        # scale = min(ratio * advantages, K.clip(ratio, 1 - self.epsilon, 1 + self.epsilon) * advantages)
         no_clip = ratio * advantages
-        clipped = K.clip(ratio, 1 - self.epsilon, 1 + self.epsilon) * advantages
+        clipped = np.clip(ratio, 1 - self.epsilon, 1 + self.epsilon) * advantages
+
+        self.actor.fit(state, np.minimum(no_clip, clipped), epochs=1, verbose=0)
+        # clipping here, get weights and set on actor to update
+        #clipped_advantage = clip(old_aprob, new_aprob, advantages)
+
+        # we want to do below
+        #self.actor.fit(state, clipped_advantage, epochs=1, verbose=0)
+        self.critic.fit(state, target, epochs=1, verbose=0)
+"""
+    def clip(self, old_prob, new_prob, advs):
+        ratio = new_prob / old_prob
+        # scale = min(ratio * advantages, K.clip(ratio, 1 - self.epsilon, 1 + self.epsilon) * advantages)
+        no_clip = ratio * advs
+        clipped = K.clip(ratio, 1 - self.epsilon, 1 + self.epsilon) * advs
         if no_clip < clipped:
-            return False
+            return no_clip
         else:
-            return True
+            return clipped
 
-
-
-
+        return None
+"""
 if __name__ == "__main__":
 
     env = gym.make('CartPole-v1')
@@ -209,8 +214,3 @@ if __name__ == "__main__":
         if episode % 50 == 0:
             agent.actor.save_weights("./saved_models/cartpole_actor.h5")
             agent.critic.save_weights("./saved_models/cartpole_critic.h5")
-
-
-
-
-
