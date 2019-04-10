@@ -79,6 +79,7 @@ class ReinforceAgent:
 		#append the log probs for each action 
 		probs = np.log(policy)
 		self.logprobs.append(probs)
+		#of action 1 or 2, return size 1 based on policy
 		return np.random.choice(self.action_size, 1, p=policy)[0] #returns array of 1, index 0 is the choice
 
 	# In Policy Gradient, Q function is not available.
