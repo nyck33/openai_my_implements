@@ -7,7 +7,7 @@ import random
 import numpy as np
 import datetime
 from collections import deque
-from keras.layers import Dense, LeakyReLU
+from keras.layers import Dense, LeakyReLU, GaussianNoise, BatchNormalization, Activation
 from keras.optimizers import Adam
 from keras.models import Sequential
 
@@ -46,9 +46,14 @@ class DQN_agent:
 		model = Sequential()
 		#std distribution from [-limit, limit], limit=sqrt(6/num input units in weight tensor)
 		model.add(Dense(8, input_dim=self.state_size, kernel_initializer='he_uniform'))
-		model.add(LeakyReLU(alpha=0.1))
+		#model.add(GaussianNoise(0.01))
+		#model.add(BatchNormalization())
+		model.add(Activation('relu'))
 		model.add(Dense(16, kernel_initializer='he_uniform'))
-		model.add(LeakyReLU(alpha=0.1))
+		#model.add(GaussianNoise(0.01))
+		#model.add(BatchNormalization())
+		model.add(Activation('relu'))
+		#model.add(LeakyReLU(alpha=0.1))
 		model.add(Dense(self.action_size, activation='linear', kernel_initializer='he_uniform'))
 		model.summary()
 		model.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))

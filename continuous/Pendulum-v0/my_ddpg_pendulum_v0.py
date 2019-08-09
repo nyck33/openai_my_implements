@@ -1,4 +1,6 @@
-#DDPG implementation from Udacity Quadcopter fitted to gym
+"""DDPG implementation from Udacity Quadcopter fitted to gym envs
+works for mtncar, 
+"""
 import numpy as np
 import gym
 import pylab
@@ -13,7 +15,7 @@ from keras.layers.advanced_activations import LeakyReLU
 import random
 from collections import namedtuple, deque
 #import actor critic, replay, OU noise
-from my_ddpg_ac import Actor, Critic, OUNoise
+from my_ddpg_ac import Actor, Critic
 
 EPISODES = 1000
 
@@ -54,8 +56,8 @@ class DDPG():
         self.action_range = action_max * 2
         self.action_low = action_max - self.action_range
         self.action_high = action_max
-        print("self.action_low", self.action_low) #-1
-        print("self.action_high", self.action_high) #1
+        print("self.action_low", self.action_low) #-2.
+        print("self.action_high", self.action_high) #2.
         #Actor Policy Model 
         self.actor_local = Actor(self.state_size, self.action_size, \
             self.action_low, self.action_high)
@@ -74,8 +76,11 @@ class DDPG():
         self.exploration_mu = 0
         self.exploration_theta = 0.15
         self.exploration_sigma = 0.2
-        self.noise = OUNoise(self.action_size, self.exploration_mu, \
-            self.exploration_theta, self.exploration_sigma)
+        #self.noise = OUNoise(self.action_size, self.exploration_mu, \
+            #self.exploration_theta, self.exploration_sigma)
+        #set self.noise to whatever equation gives, not reset noise after episodes
+        #self.noise_decay = 0.99
+        #self.noise = 0
 
         #replay memory
         self.buffer_size = 100000
@@ -83,16 +88,19 @@ class DDPG():
         self.memory = ReplayBuffer(self.buffer_size, self.batch_size)
 
         #Algorithm parameters
-        self.gamma = 0.999 #discount parameter for critic TD error
-        self.tau = 0.01 #soft update parameter
+        self.gamma = 0.99 #discount parameter for critic TD error
+        self.tau = 0.001 #soft update parameter
         """
         self.tau_actor = 0.1
         self.tau_critic = 0.5 
         """
         self.render = True
+
+        self.load = False
+
     #resets noise and env and outputs the initial state 
     def reset_episode(self):
-        self.noise.reset()
+        #self.noise.reset()
         state = env.reset()
         self.last_state = state 
         return state
@@ -114,9 +122,9 @@ class DDPG():
         """Returns actions for given state(s) as per current policy"""
         state = np.reshape(state, [-1, self.state_size])
         raw_action = self.actor_local.model.predict(state)[0]
-        noise = self.noise.sample()
-        action = np.clip(raw_action + noise, -1, 1) #add noise for exploration
-        return action 
+        #noise = self.noise.sample()
+        #action = np.clip(raw_action + noise, -2, 2) #add noise for exploration
+        return raw_action 
 
     def learn(self, experiences):
         """update policy and value parameters using given batch of 
@@ -172,11 +180,12 @@ class DDPG():
 
 if __name__== "__main__":
 
-    env=gym.make("MountainCarContinuous-v0")
+    env=gym.make("Pendulum-v0")
 
     state_size = env.observation_space.shape[0]
     action_size = env.action_space.shape[0]
     action_bound = env.action_space.high
+    print("state_size, action_size, action_bound", state_size, action_size, action_bound)
     #ensure action bound is symmetric
     assert (env.action_space.high == -env.action_space.low)
 
@@ -195,13 +204,16 @@ if __name__== "__main__":
         while not done:
             if agent.render:
                 env.render()
+            #decay the noise
 
-            #get action
+            #self.noise_decay *= 
+            #get action from network
             action = agent.act(state)
             next_state, reward, done, info = env.step(action)
             #adjust reward for incremental improvements in position
-            #state[0] is the cart position from -1.2 to 0.6 
-            reward += state[0] + 0.5
+            #special reward for mountaincarcontinuous
+            #state[0] is the cart position from -1.2 to 0.6
+            #reward += state[0] + 0.5
             #save experience in memory
             agent.step(action=action, reward=reward, next_state=next_state, done=done)
             
@@ -221,15 +233,15 @@ if __name__== "__main__":
                 pylab.plot(episodes, scores, 'b')
                 pylab.plot(episodes, means, 'g')
                 pylab.plot(episodes, stds, 'r')
-                pylab.savefig("./saved_graphs/DDPGMountainCarContinuous.png")
-                print('episode:', episode, 'score:', score, 'mean:', round(mean,2), 'std:', round(std, 2))
+                pylab.savefig("./saved_graphs/DDPG_pendulum_v0.png")
+                print('episode:', episode, 'score:', score, 'best:', round(large,2), 'mean:', round(mean,2), 'std:', round(std, 2))
                 if np.mean(scores[-min(100, len(scores)):]) >= 90.0:
                     sys.exit()
-'''                   
+        """          
         if episode % 50 == 0:
-            agent.actor_local.save_weights("./saved_models/DDPGmtncarcont_actor.h5")
-            agent.critic_local.save_weights("./saved_models/DDPGmtncarcont_critic.h5")
-'''
+            agent.actor_local.save_weights("./saved_models/DDPG_cartpoleV1_actor.h5")
+            agent.critic_local.save_weights("./saved_models/DDPG_cartpoleV1_critic.h5")
+"""
 
 
 

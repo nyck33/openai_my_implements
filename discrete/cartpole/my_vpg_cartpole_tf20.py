@@ -5,6 +5,8 @@
 Usually there isn’t that much of a problem of overfitting in RL due to state space, ie. can get more samples from env.
 Ratherly, ‘dying’ neurons are more of an issue than overfitting, hence the success of strategies that utilise 
 leaky linear rectified units (Leaky ReLU).  ie. dropout reduces overfitting
+
+doing something with logprobs but original did not have this and results suffered
 '''
 #pip install -q tensorflow==2.0.0-alpha0
 import sys
@@ -12,9 +14,10 @@ import gym
 import pylab
 import numpy as np
 import tensorflow as tf
-from keras.layers import Dense, LeakyReLU
+from keras.layers import Dense, LeakyReLU, Activation
 from keras.models import Sequential
 from keras.optimizers import Adam
+from keras.layers import GaussianNoise, BatchNormalization
 
 #optional, can use tf.keras.layers.Dense, etc
 #import keras
@@ -36,7 +39,7 @@ class ReinforceAgent:
 		self.lr = 0.001
 		#Karpathy had 200 neurons in the hidden layer
 		self.hidden1, self.hidden2 = 64, 64
-		droput = 0.5
+		self.dropout = 0.5
 
 		#create model for policy network
 		self.model = self.build_model()
@@ -57,9 +60,15 @@ class ReinforceAgent:
 	def build_model(self):
 		model = Sequential()
 		model.add(Dense(self.hidden1, input_dim=self.state_size))
-		model.add(LeakyReLU(alpha=0.1))
+		#model.add(LeakyReLU(alpha=0.1))
+		model.add(GaussianNoise(0.5))
+		model.add(BatchNormalization())
+		model.add(Activation('relu'))
 		model.add(Dense(self.hidden2))
-		model.add(LeakyReLU(alpha=0.1))
+		#model.add(LeakyReLU(alpha=0.1))
+		model.add(GaussianNoise(0.5))
+		model.add(BatchNormalization())
+		model.add(Activation('relu'))
 		model.add(Dense(self.action_size, activation='softmax'))
 
 		model.summary()
@@ -79,8 +88,9 @@ class ReinforceAgent:
 		#append the log probs for each action 
 		probs = np.log(policy)
 		self.logprobs.append(probs)
-		#of action 1 or 2, return size 1 based on policy
-		return np.random.choice(self.action_size, 1, p=policy)[0] #returns array of 1, index 0 is the choice
+		'''generate random sample of size action space and pick 1 based on policy probs, return the 
+        first and only index'''
+        return np.random.choice(self.action_size, 1, p=policy)[0] #returns array of 1, index 0 is the choice
 
 	# In Policy Gradient, Q function is not available.
 	# Instead agent uses sample discounted returns for evaluating policy

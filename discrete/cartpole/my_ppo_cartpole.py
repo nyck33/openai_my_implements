@@ -1,5 +1,7 @@
 """
 This implementation of PPO is based on a2c code with PPO subbed in for actor.
+https://spinningup.openai.com/en/latest/algorithms/ppo.html?highlight=ppo
+
 
 regularization in RL: https://arxiv.org/pdf/1810.00123.pdf
 maximum entropy RL: https://medium.com/@awjuliani/maximum-entropy-policies-in-reinforcement-learning-everyday-life-f5a1cc18d32d
@@ -22,10 +24,7 @@ from keras import backend as K
 EPISODES = 1000
 
 
-# A2C(Advantage Actor-Critic) agent for the Cartpole
-
-
-class A2CAgent:
+class PPOAgent:
     def __init__(self, state_size, action_size):
         # if you want to see Cartpole learning, then change to True
         self.render = False
@@ -37,8 +36,8 @@ class A2CAgent:
 
         # These are hyper parameters for the Policy Gradient
         self.discount_factor = 0.99  # gamma for next state
-        self.actor_lr = 0.001
-        self.critic_lr = 0.005
+        self.actor_lr = 0.001 #0.001
+        self.critic_lr = 0.005 #0.005
 
         # old prob before update
         self.old_prob = 0.
@@ -64,6 +63,7 @@ class A2CAgent:
         actor.add(Dense(24, input_dim=self.state_size, activation='relu',
                         kernel_initializer='he_uniform'))
         # actor.add(LeakyReLU(alpha=0.1))
+        actor.add(Dense(24, activation ='relu', kernel_initializer='he_uniform'))
         actor.add(Dense(self.action_size, activation='softmax',
                         kernel_initializer='he_uniform'))
         actor.summary()
@@ -78,6 +78,7 @@ class A2CAgent:
         critic.add(Dense(24, input_dim=self.state_size, activation='relu',
                          kernel_initializer='he_uniform'))
         # critic.add(LeakyReLU(alpha=0.1))
+        #critic.add(Dense(24, activation='relu', kernel_initializer='he_uniform')) #this layer broke it
         critic.add(Dense(self.value_size, activation='linear',
                          kernel_initializer='he_uniform'))
         critic.summary()
@@ -160,7 +161,7 @@ if __name__ == "__main__":
 
     state_size = env.observation_space.shape[0]
     action_size = env.action_space.n
-    agent = A2CAgent(state_size, action_size)
+    agent = PPOAgent(state_size, action_size)
 
     scores, episodes, means, stds = [], [], [], []
 
